@@ -16,6 +16,7 @@ import (
 	"github.com/wyw14/cry-96/internal/safety"
 	"github.com/wyw14/cry-96/internal/schedule"
 	"github.com/wyw14/cry-96/internal/signal"
+	"github.com/wyw14/cry-96/internal/water"
 )
 
 // Runtime contains the long-lived component graph used by HTTP handlers.
@@ -42,6 +43,7 @@ type Runtime struct {
 	Snapshot        *monitor.Snapshot
 	Incidents       *monitor.IncidentReview
 	Health          *monitor.HealthRegistry
+	Water           *water.Ledger
 	Recovery        *cycle.Recovery
 	Chambers        []string
 	Now             func() time.Time
@@ -54,6 +56,7 @@ func NewRuntime(ctx context.Context, dataDirectory string) (*Runtime, error) {
 		return nil, err
 	}
 	recorder := journal.NewRecorder(store, now)
+	waterLedger := water.NewLedger(recorder, store, now)
 	chambers := []string{"chamber-1", "chamber-2"}
 	gateState := gate.NewState(chambers...)
 	gateCommands := gate.NewCommands()
@@ -97,6 +100,9 @@ func NewRuntime(ctx context.Context, dataDirectory string) (*Runtime, error) {
 	if _, err := recovery.RestoreAll(ctx); err != nil {
 		return nil, err
 	}
+	if err := waterLedger.RestoreAll(ctx); err != nil {
+		return nil, err
+	}
 	health := monitor.NewHealthRegistry()
 	for _, chamberID := range chambers {
 		for _, device := range []model.DeviceKind{
@@ -115,7 +121,7 @@ func NewRuntime(ctx context.Context, dataDirectory string) (*Runtime, error) {
 		Interlocks: interlockCoordinator, Cycles: cycleCoordinator, CycleService: cycleService,
 		Leases: leaseService, LeaseSweeper: leaseSweeper, Safety: safetyService,
 		Snapshot:  monitor.NewSnapshot(cycleCoordinator, gateState, admissionService, signalService, safetyService, now),
-		Incidents: monitor.NewIncidentReview(store), Health: health, Recovery: recovery,
+		Incidents: monitor.NewIncidentReview(store), Health: health, Recovery: recovery, Water: waterLedger,
 		Chambers: chambers, Now: now,
 	}, nil
 }

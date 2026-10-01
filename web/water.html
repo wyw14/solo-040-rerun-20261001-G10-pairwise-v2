@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LockFlow 用水核算</title><link rel="stylesheet" href="/assets/styles.css"></head>
+<body><header><div class="brand"><span class="brand-mark">LF</span>LockFlow</div><nav><a href="/operations">Operations</a><a href="/chamber">Chamber</a><a href="/interlocks">Interlocks</a><a href="/incidents">Incidents</a><a aria-current="page" href="/water">Water</a></nav></header>
+<main>
+<div class="page-title"><div><h1>每闸次用水核算</h1><div class="muted">按闸室几何与起止水位观测估算；阀门开度仅作动作溯源，不作为流量。缺失测量标记为不可核算。</div></div><button id="refresh">刷新查询</button></div>
+<div class="grid">
+  <section class="panel"><h2>闸室几何参数</h2>
+    <div class="form-row"><div><label for="g-chamber">闸室</label><select id="g-chamber"><option>chamber-1</option><option>chamber-2</option></select></div>
+    <div><label for="g-length">长度 (m)</label><input id="g-length" type="number" value="110" min="1" step="0.1"></div>
+    <div><label for="g-width">宽度 (m)</label><input id="g-width" type="number" value="12" min="1" step="0.1"></div></div>
+    <div class="form-row"><div><label for="g-sill">槛顶高程 (m)</label><input id="g-sill" type="number" value="0" min="0" step="0.1"></div><div>&nbsp;</div><div><label>&nbsp;</label><button id="g-save">保存几何参数</button></div></div>
+    <div class="message" id="g-message"></div>
+  </section>
+  <section class="panel"><h2>水位起止观测</h2>
+    <div class="form-row"><div><label for="o-chamber">闸室</label><select id="o-chamber"><option>chamber-1</option><option>chamber-2</option></select></div>
+    <div><label for="o-cycle">闸次 cycle_id</label><input id="o-cycle" placeholder="uuid"></div>
+    <div><label for="o-gen">generation</label><input id="o-gen" type="number" value="1" min="1"></div></div>
+    <div class="form-row"><div><label for="o-phase">阶段</label><select id="o-phase"><option value="start">起始 start</option><option value="end">终止 end</option></select></div>
+    <div><label for="o-missing">测量缺失（不可核算）</label><select id="o-missing"><option value="false">已测量</option><option value="true">缺失</option></select></div>
+    <div><label for="o-meters">水位 (m)</label><input id="o-meters" type="number" value="4.2" min="0" step="0.01"></div></div>
+    <div class="form-row"><div><label for="o-time">观测时间 (RFC3339, 可空)</label><input id="o-time" placeholder="2026-10-01T08:00:00Z"></div><div>&nbsp;</div><div><label>&nbsp;</label><button id="o-save">提交观测</button></div></div>
+    <div class="message" id="o-message"></div>
+  </section>
+  <section class="panel"><h2>触发闸次核算</h2>
+    <div class="form-row"><div><label for="a-chamber">闸室</label><select id="a-chamber"><option>chamber-1</option><option>chamber-2</option></select></div>
+    <div><label for="a-cycle">闸次 cycle_id</label><input id="a-cycle" placeholder="uuid"></div>
+    <div><label for="a-gen">generation</label><input id="a-gen" type="number" value="1" min="1"></div></div>
+    <div class="form-row"><div>&nbsp;</div><div>&nbsp;</div><div><label>&nbsp;</label><button id="a-run">核算本闸次</button></div></div>
+    <div class="message" id="a-message"></div>
+  </section>
+  <section class="panel"><h2>按闸室/时段查询</h2>
+    <div class="form-row"><div><label for="q-chamber">闸室</label><select id="q-chamber"><option>chamber-1</option><option>chamber-2</option></select></div>
+    <div><label for="q-from">起 (RFC3339)</label><input id="q-from" placeholder="可空"></div>
+    <div><label for="q-to">止 (RFC3339)</label><input id="q-to" placeholder="可空"></div></div>
+    <div class="form-row"><div>&nbsp;</div><div>&nbsp;</div><div><label>&nbsp;</label><button id="q-run">查询</button></div></div>
+    <div class="message" id="q-message"></div>
+  </section>
+  <section class="panel wide"><h2>核算结果</h2><table><thead><tr><th>闸室</th><th>闸次</th><th>状态</th><th>起/止水位 (m)</th><th>水位变幅 (m)</th><th>估算水量 (m³)</th><th>净水量 (m³)</th><th>缺失项</th><th>数据质量</th><th>阀门斜坡动作（溯源）</th><th>采样/事件溯源</th><th>核算时间</th></tr></thead><tbody id="accounts"><tr><td colspan="12" class="muted">尚无核算结果</td></tr></tbody></table></section>
+</div>
+</main>
+<script src="/assets/app.js"></script><script>
+const { api, text, shortID, setMessage, withBusy } = window.LockFlow;
+const accountsBody = document.querySelector('#accounts');
+const valueOrMissing = (v) => (v === undefined || v === null || v === '') ? '— 不可核算' : v;
+async function saveGeometry(button) {
+  await withBusy(button, async () => {
+    try {
+      const body = { length_m: Number(document.querySelector('#g-length').value), width_m: Number(document.querySelector('#g-width').value), sill_elevation_m: Number(document.querySelector('#g-sill').value) };
+      const chamber = document.querySelector('#g-chamber').value;
+      const result = await api(`/api/chambers/${chamber}/geometry`, { method: 'PUT', body: JSON.stringify(body) });
+      setMessage(document.querySelector('#g-message'), `已保存（事件 #${result.source_event_seq}），平面面积 ${(result.length_m * result.width_m).toFixed(1)} m²`);
+    } catch (e) { setMessage(document.querySelector('#g-message'), e.message); }
+  });
+}
+async function saveObservation(button) {
+  await withBusy(button, async () => {
+    try {
+      const missing = document.querySelector('#o-missing').value === 'true';
+      const body = {
+        cycle_id: document.querySelector('#o-cycle').value.trim(),
+        generation: Number(document.querySelector('#o-gen').value),
+        phase: document.querySelector('#o-phase').value,
+        meters: missing ? null : Number(document.querySelector('#o-meters').value),
+        observed_at: document.querySelector('#o-time').value.trim() || undefined,
+      };
+      const chamber = document.querySelector('#o-chamber').value;
+      const result = await api(`/api/chambers/${chamber}/water/observations`, { method: 'POST', body: JSON.stringify(body) });
+      setMessage(document.querySelector('#o-message'), result.present ? `已记录观测 ${result.phase}=${result.meters}m（采样 ${shortID(result.id)}，事件 #${result.source_event_seq}）` : `已记录【缺失】观测 ${result.phase}（事件 #${result.source_event_seq}），该闸次将不可核算`);
+    } catch (e) { setMessage(document.querySelector('#o-message'), e.message); }
+  });
+}
+async function runAccount(button) {
+  await withBusy(button, async () => {
+    try {
+      const chamber = document.querySelector('#a-chamber').value;
+      const cycle = document.querySelector('#a-cycle').value.trim();
+      const body = { generation: Number(document.querySelector('#a-gen').value) };
+      const result = await api(`/api/chambers/${chamber}/cycles/${cycle}/account`, { method: 'POST', body: JSON.stringify(body) });
+      setMessage(document.querySelector('#a-message'), result.status === 'estimated' ? `估算水量 ${result.estimated_volume_m3.toFixed(1)} m³` : '已标记为不可核算（存在缺失测量）');
+      await query();
+    } catch (e) { setMessage(document.querySelector('#a-message'), e.message); }
+  });
+}
+function render(items) {
+  if (!items.length) { accountsBody.innerHTML = '<tr><td colspan="12" class="muted">尚无核算结果</td></tr>'; return; }
+  accountsBody.innerHTML = items.map((a) => {
+    const notes = (a.quality_notes || []).map((n) => `${n.code}: ${n.message}`).join('\n');
+    const actions = (a.valve_actions || []).map((v) => `${v.device} →${v.target}（事件#${v.event_seq}，命令 ${shortID(v.command_id)}，开度非流量）`).join('\n');
+    const trace = `几何事件#${a.geometry_event_seq || '-'}；起采样事件#${a.start_event_seq || '-'}；止采样事件#${a.end_event_seq || '-'}`;
+    const missing = (a.missing_phases || []).join(', ') || '—';
+    const level = a.status === 'estimated' ? `${a.start_meters} → ${a.end_meters}` : '—';
+    return `<tr>
+      <td>${a.chamber_id}</td><td title="${a.cycle_id}">${shortID(a.cycle_id)}<div class="muted">gen ${a.generation} · ${text(a.direction)}</div></td>
+      <td><span class="status ${a.status === 'estimated' ? '' : 'warning'}">${a.status}</span></td>
+      <td>${level}</td><td>${valueOrMissing(a.level_change_m)}</td>
+      <td><strong>${a.status === 'estimated' ? a.estimated_volume_m3.toFixed(1) : '不可核算'}</strong></td>
+      <td>${a.status === 'estimated' ? a.net_volume_m3.toFixed(1) : '—'}</td>
+      <td>${missing}</td><td title="${notes.replace(/"/g, '&quot;')}">${(a.quality_notes || []).length} 条说明</td>
+      <td class="muted" title="${actions.replace(/"/g, '&quot;')}">${(a.valve_actions || []).length} 个斜坡命令</td>
+      <td class="muted">${trace}</td><td>${new Date(a.accounted_at).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+async function query() {
+  const chamber = document.querySelector('#q-chamber').value;
+  const from = document.querySelector('#q-from').value.trim();
+  const to = document.querySelector('#q-to').value.trim();
+  const params = new URLSearchParams({ chamber_id: chamber });
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const data = await api(`/api/water/accounts?${params.toString()}`);
+  render(data.accounts || []);
+  setMessage(document.querySelector('#q-message'), `返回 ${data.accounts.length} 条核算记录`);
+}
+document.querySelector('#g-save').addEventListener('click', (e) => saveGeometry(e.target));
+document.querySelector('#o-save').addEventListener('click', (e) => saveObservation(e.target));
+document.querySelector('#a-run').addEventListener('click', (e) => runAccount(e.target));
+document.querySelector('#q-run').addEventListener('click', () => query().catch((e) => setMessage(document.querySelector('#q-message'), e.message)));
+document.querySelector('#refresh').addEventListener('click', () => query().catch((e) => setMessage(document.querySelector('#q-message'), e.message)));
+query().catch(() => {});
+</script></body></html>
