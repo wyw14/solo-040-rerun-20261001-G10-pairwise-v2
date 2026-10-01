@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LockFlow Water Accounting</title><link rel="stylesheet" href="/assets/styles.css"></head>
+<body>
+<header><div class="brand"><span class="brand-mark">LF</span>LockFlow</div><nav><a href="/operations">Operations</a><a href="/chamber">Chamber</a><a href="/interlocks">Interlocks</a><a href="/incidents">Incidents</a><a aria-current="page" href="/water">Water</a></nav></header>
+<main>
+  <div class="page-title"><div><h1>Water accounting</h1><div class="muted">Per-transit water use from level observations; valve openings are control positions, never flow</div></div><button id="refresh">Refresh</button></div>
+  <div class="grid">
+    <section class="panel third">
+      <h2>Chamber geometry</h2>
+      <form id="geometry-form">
+        <label for="g-chamber">Chamber</label><select id="g-chamber"><option>chamber-1</option><option>chamber-2</option></select>
+        <div class="form-row" style="grid-template-columns:1fr 1fr"><div><label for="g-length">Length (m)</label><input id="g-length" type="number" value="200" min="1" step="0.1"></div><div><label for="g-width">Width (m)</label><input id="g-width" type="number" value="24" min="1" step="0.1"></div></div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr"><div><label for="g-sill">Sill elevation (m)</label><input id="g-sill" type="number" value="0" min="0" step="0.1"></div><div><label for="g-deck">Deck elevation (m)</label><input id="g-deck" type="number" value="15" min="0.1" step="0.1"></div></div>
+        <button type="submit">Save geometry</button>
+        <div class="message" id="geometry-message"></div>
+      </form>
+    </section>
+    <section class="panel third">
+      <h2>Level observation</h2>
+      <form id="observation-form">
+        <label for="o-chamber">Chamber</label><select id="o-chamber"><option>chamber-1</option><option>chamber-2</option></select>
+        <div class="form-row" style="grid-template-columns:1fr 1fr"><div><label for="o-cycle">Cycle ID</label><input id="o-cycle" placeholder="from transit"></div><div><label for="o-gen">Generation</label><input id="o-gen" type="number" min="1" value="1"></div></div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr"><div><label for="o-boundary">Boundary</label><select id="o-boundary"><option value="start">Start level</option><option value="end">End level</option></select></div><div><label for="o-level">Level (m)</label><input id="o-level" type="number" min="0" step="0.01" value="5"></div></div>
+        <label for="o-time">Observed at (RFC3339, optional)</label><input id="o-time" placeholder="2026-09-29T08:30:00Z">
+        <button type="submit">Record observation</button>
+        <div class="message" id="observation-message"></div>
+      </form>
+    </section>
+    <section class="panel third">
+      <h2>Query by period</h2>
+      <form id="query-form">
+        <label for="q-chamber">Chamber</label><select id="q-chamber"><option value="">All chambers</option><option>chamber-1</option><option>chamber-2</option></select>
+        <label for="q-from">From (RFC3339)</label><input id="q-from" placeholder="2026-09-29T00:00:00Z">
+        <label for="q-to">To (RFC3339)</label><input id="q-to" placeholder="2026-09-30T00:00:00Z">
+        <button type="submit">Query accounts</button>
+        <div class="message" id="query-message"></div>
+      </form>
+    </section>
+    <section class="panel wide">
+      <h2>Transit accounts</h2>
+      <table><thead><tr><th>Chamber</th><th>Cycle / gen</th><th>Direction</th><th>Status</th><th>Level Δ (m)</th><th>Volume (m³)</th><th>Confidence</th><th>Quality &amp; trace</th></tr></thead><tbody id="accounts"></tbody></table>
+    </section>
+  </div>
+</main>
+<script src="/assets/app.js"></script>
+<script src="/assets/water.js"></script>
+</body></html>

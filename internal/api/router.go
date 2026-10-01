@@ -25,6 +25,7 @@ func Router(runtime *Runtime, webDirectory string) http.Handler {
 	router.Get("/chamber", pageHandler(webDirectory, "chamber.html"))
 	router.Get("/interlocks", pageHandler(webDirectory, "interlocks.html"))
 	router.Get("/incidents", pageHandler(webDirectory, "incidents.html"))
+	router.Get("/water", pageHandler(webDirectory, "water.html"))
 	router.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(http.Dir(webDirectory))))
 	router.Route("/api", func(api chi.Router) {
 		api.Get("/chambers", chambersHandler(runtime))
@@ -49,6 +50,12 @@ func Router(runtime *Runtime, webDirectory string) http.Handler {
 		api.Post("/leases/{vesselID}/heartbeat", heartbeatHandler(runtime))
 		api.Post("/leases/{vesselID}/reassign", reassignLeaseHandler(runtime))
 		api.Delete("/leases/{vesselID}", releaseLeaseHandler(runtime))
+		api.Get("/water/accounts", allWaterAccountsHandler(runtime))
+		api.Get("/chambers/{chamberID}/water/geometry", getGeometryHandler(runtime))
+		api.Put("/chambers/{chamberID}/water/geometry", configureGeometryHandler(runtime))
+		api.Post("/chambers/{chamberID}/water/observations", levelObservationHandler(runtime))
+		api.Get("/chambers/{chamberID}/water/accounts", waterAccountsHandler(runtime))
+		api.Get("/chambers/{chamberID}/water/accounts/{cycleID}", waterAccountHandler(runtime))
 	})
 	return router
 }

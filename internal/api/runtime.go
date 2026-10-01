@@ -16,6 +16,7 @@ import (
 	"github.com/wyw14/cry-96/internal/safety"
 	"github.com/wyw14/cry-96/internal/schedule"
 	"github.com/wyw14/cry-96/internal/signal"
+	"github.com/wyw14/cry-96/internal/water"
 )
 
 // Runtime contains the long-lived component graph used by HTTP handlers.
@@ -43,6 +44,7 @@ type Runtime struct {
 	Incidents       *monitor.IncidentReview
 	Health          *monitor.HealthRegistry
 	Recovery        *cycle.Recovery
+	Water           *water.Service
 	Chambers        []string
 	Now             func() time.Time
 }
@@ -89,6 +91,8 @@ func NewRuntime(ctx context.Context, dataDirectory string) (*Runtime, error) {
 	)
 	cycleCoordinator := cycle.NewCoordinator(gateController, hydraulicsController, recorder, now)
 	cycleService := cycle.NewService(cycleCoordinator, admissionService)
+	waterService := water.NewService(store, recorder, now)
+	waterService.BindCycleLookup(cycleCoordinator)
 	safetyCoordinator = safety.NewCoordinator(gateCommands, barrier, recorder, now)
 	safetyService := safety.NewService(safetyCoordinator, cycleCoordinator)
 	signalService.BindTransitLookup(cycleCoordinator)
@@ -116,6 +120,7 @@ func NewRuntime(ctx context.Context, dataDirectory string) (*Runtime, error) {
 		Leases: leaseService, LeaseSweeper: leaseSweeper, Safety: safetyService,
 		Snapshot:  monitor.NewSnapshot(cycleCoordinator, gateState, admissionService, signalService, safetyService, now),
 		Incidents: monitor.NewIncidentReview(store), Health: health, Recovery: recovery,
+		Water:    waterService,
 		Chambers: chambers, Now: now,
 	}, nil
 }
